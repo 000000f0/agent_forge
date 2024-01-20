@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 
 
 class BotApi:
+    
     def __init__(self, callback=None):
         self.app = Flask(__name__)
         self.callback = callback
@@ -16,9 +17,9 @@ class BotApi:
 
             # Trigger the callback function if it's set
             if self.callback:
-                self.callback(message)
+                response = self.callback(message)
 
-            return jsonify({"received_message": message})
+            return jsonify({"response": response})
 
     def run(self, host='127.0.0.1', port=5001):
         self.app.run(host=host, port=port)
