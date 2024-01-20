@@ -43,8 +43,8 @@ ModelLibrary:
           allow_custom_value: True
 
 ModelSettings:
-  API: gemini_api
-  Model: gemini-pro
+  API: openai_api
+  Model: fast_model
   Params:
     max_new_tokens: 2000
     temperature: 0.5
