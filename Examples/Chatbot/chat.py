@@ -10,8 +10,10 @@ from agentforge.agents.ActionSelectionAgent import ActionSelectionAgent
 from agentforge.utils.function_utils import Functions
 
 import re
+import requests
+import json
 
-
+response_array = []
 class Chatbot:
     storage = StorageInterface().storage_utils
     thou = ThoughtAgent()
@@ -26,7 +28,7 @@ class Chatbot:
     message = None
     cat = None
     categories = None
-
+    
     def __init__(self):
 
         self.chat_history = self.storage.select_collection("chat_history")
@@ -56,15 +58,17 @@ class Chatbot:
         self.theory_agent(message, history)
 
         # run reflect agent
-        self.reflect_agent(message, history)
+        answer = self.reflect_agent(message, history)
         self.memories = []
+        return answer
 
     def thought_agent(self, message, history):
         self.result = self.thou.run(user_message=message,
                                     history=history["documents"])
-        ApiClient().send_message("layer_update", 1, f"Thought Agent:\n=====\n{self.result}\n=====\n")
+        #ApiClient().send_message("layer_update", 1, f"Thought Agent:\n=====\n{self.result}\n=====\n")
         self.thought = self.parse_lines()
         print(f"self.thought: {self.thought}")
+        response_array.append({"thought":self.thought})
         self.categories = self.thought["Categories"].split(",")
         for category in self.categories:
             formatted_category = self.format_string(category)
@@ -78,18 +82,19 @@ class Chatbot:
                                    emotion=self.thought["Emotion"],
                                    reason=self.thought["Reason"],
                                    thought=self.thought["Inner Thought"])
-        ApiClient().send_message("layer_update", 1, f"Generate Agent:\n=====\n{self.result}\n=====\n")
+        #ApiClient().send_message("layer_update", 1, f"Generate Agent:\n=====\n{self.result}\n=====\n")
         self.generate = self.parse_lines()
-        print(f"self.thought: {self.generate}")
+        print(f"self.gen_agent: {self.generate}")
+        response_array.append({"generated":self.generate})
         self.chat_response = self.result
 
     def theory_agent(self, message, history):
         self.result = self.theo.run(user_message=message,
                                     history=history["documents"])
-        ApiClient().send_message("layer_update", 1, f"Theory Agent:\n=====\n{self.result}\n=====\n")
+        #ApiClient().send_message("layer_update", 1, f"Theory Agent:\n=====\n{self.result}\n=====\n")
         self.theory = self.parse_lines()
-        print(f"self.thought: {self.theory}")
-
+        print(f"self.theory: {self.theory}")
+        response_array.append({"theory":self.theory})
     def reflect_agent(self, message, history):
         if "What" not in self.theory:
             self.theory = {"What": "Don't Know.", "Why": "Not enough information."}
@@ -103,15 +108,21 @@ class Chatbot:
                                    what=self.theory["What"],
                                    why=self.theory["Why"],
                                    response=self.chat_response)
-        ApiClient().send_message("layer_update", 1, f"Reflect Agent:\n=====\n{self.result}\n=====\n")
+        #ApiClient().send_message("layer_update", 1, f"Reflect Agent:\n=====\n{self.result}\n=====\n")
         self.reflection = self.parse_lines()
-        print(f"self.thought: {self.reflection}")
+        print(f"self.reflection: {self.reflection}")
 
         if self.reflection["Choice"] == "respond":
-            ApiClient().send_message("layer_update", 0, f"Chatbot: {self.chat_response}\n")
+            #ApiClient().send_message("layer_update", 0, f"Chatbot: {self.chat_response}\n")
+            print(f"self.chat_response: {self.chat_response}")
             self.save_memory(self.chat_response)
+            response_array.append({"response":self.chat_response})
+            return response_array
         elif self.reflection["Choice"] == "nothing":
-            ApiClient().send_message("layer_update", 0, f"Chatbot: ...\n")
+            #ApiClient().send_message("layer_update", 0, f"Chatbot: ...\n")
+            print(f"self.reflection.nothing: {self.reflection}")
+            response_array.append({"response":self.reflection})
+            return response_array
         else:
             new_response = self.gen.run(user_message=message,
                                         history=history["documents"],
@@ -123,9 +134,11 @@ class Chatbot:
                                         why=self.theory["Why"],
                                         feedback=self.reflection["Reason"],
                                         response=self.chat_response)
-            ApiClient().send_message("layer_update", 0, f"Chatbot: {new_response}\n")
+            #ApiClient().send_message("layer_update", 0, f"Chatbot: {new_response}\n")
+            print(f"new.response: {new_response}")
             self.save_memory(new_response)
-
+            response_array.append({"response":new_response})
+            return response_array
     def save_memory(self, bot_response):
         # Existing chat history saving logic
         size = self.storage.count_collection("chat_history")
@@ -185,7 +198,7 @@ class Chatbot:
         if size == 0:
             history["documents"].append("No Results!")
         self.storage.save_memory(params)
-        ApiClient().send_message("layer_update", 0, f"User: {message}\n")
+        #ApiClient().send_message("layer_update", 0, f"User: {message}\n")
         return history
 
     def parse_lines(self):
@@ -271,13 +284,14 @@ class Chatbot:
             formatted_strings.append(formatted_string)
 
         return "\n".join(formatted_strings).strip('---\n')
-
+    
+    
 
 if __name__ == '__main__':
     print("Starting")
 
     api = ListenForUI(callback=Chatbot().run)
-
+    
     # Add a simple input loop to keep the main thread running
     while True:
         try:
